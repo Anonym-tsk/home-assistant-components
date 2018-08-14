@@ -16,7 +16,7 @@ from homeassistant.const import (ATTR_UNIT_OF_MEASUREMENT, ATTR_TEMPERATURE, CON
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.restore_state import async_get_last_state
 from homeassistant.core import callback
-from configparser import (ConfigParser, NoOptionError)
+from configparser import (ConfigParser, NoOptionError, NoSectionError)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ class RemoteClimate(ClimateDevice):
         try:
             self._commands_ini.get(SECTION_IDLE, COMMAND_IDLE)
             self._support_flags = self._support_flags | SUPPORT_AWAY_MODE
-        except NoOptionError:
+        except (NoOptionError, NoSectionError):
             pass
 
         if temp_entity_id:
