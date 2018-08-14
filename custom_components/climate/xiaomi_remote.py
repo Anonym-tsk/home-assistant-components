@@ -9,8 +9,8 @@ from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA,
                                               STATE_ON, STATE_OFF, STATE_IDLE, STATE_HEAT, STATE_COOL, STATE_AUTO,
                                               ATTR_OPERATION_MODE, ATTR_OPERATION_LIST, ATTR_MAX_TEMP, ATTR_MIN_TEMP,
                                               ATTR_CURRENT_TEMPERATURE, ATTR_TARGET_TEMP_STEP, ATTR_FAN_MODE,
-                                              ATTR_FAN_LIST,
-                                              SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE, SUPPORT_FAN_MODE,
+                                              ATTR_FAN_LIST, ATTR_SWING_MODE, ATTR_SWING_LIST, ATTR_AWAY_MODE,
+                                              SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE, SUPPORT_FAN_MODE, SUPPORT_SWING_MODE,
                                               SUPPORT_ON_OFF, SUPPORT_AWAY_MODE)
 from homeassistant.const import (ATTR_UNIT_OF_MEASUREMENT, ATTR_TEMPERATURE, CONF_NAME, CONF_CUSTOMIZE)
 from homeassistant.helpers.event import async_track_state_change
@@ -35,17 +35,25 @@ DEFAULT_TARGET_TEMP = 24
 DEFAULT_TARGET_TEMP_STEP = 1
 DEFAULT_OPERATION_LIST = [STATE_HEAT, STATE_COOL, STATE_AUTO]
 DEFAULT_FAN_MODE_LIST = ['low', 'medium', 'high', 'auto']
+DEFAULT_SWING_MODE_LIST = ['off', 'auto']
 DEFAULT_OPERATION = STATE_COOL
 DEFAULT_FAN_MODE = 'auto'
+DEFAULT_SWING_MODE = 'off'
+
+ATTR_POWER = 'power'
+ATTR_SUPPORTED_FEATURES = 'supported_features'
+
 
 SECTION_IDLE = 'idle'
-SECTION_POWER_OFF = 'off'
 COMMAND_IDLE = 'idle_command'
+SECTION_POWER_OFF = 'off'
 COMMAND_POWER_OFF = 'off_command'
+SECTION_SWING = 'swing'
 
 CUSTOMIZE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_OPERATION_LIST): vol.All(cv.ensure_list, [cv.string]),
-    vol.Optional(ATTR_FAN_LIST): vol.All(cv.ensure_list, [cv.string])
+    vol.Optional(ATTR_FAN_LIST): vol.All(cv.ensure_list, [cv.string]),
+    vol.Optional(ATTR_SWING_LIST): vol.All(cv.ensure_list, [cv.string])
 })
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
@@ -60,6 +68,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(ATTR_TARGET_TEMP_STEP, default=DEFAULT_TARGET_TEMP_STEP): cv.positive_int,
     vol.Optional(ATTR_OPERATION_MODE, default=DEFAULT_OPERATION): cv.string,
     vol.Optional(ATTR_FAN_MODE, default=DEFAULT_FAN_MODE): cv.string,
+    vol.Optional(ATTR_SWING_MODE, default=DEFAULT_SWING_MODE): cv.string,
     vol.Optional(CONF_CUSTOMIZE, default={}): CUSTOMIZE_SCHEMA
 })
 
@@ -75,8 +84,10 @@ def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     target_temp_step = config.get(ATTR_TARGET_TEMP_STEP)
     operation_list = config.get(CONF_CUSTOMIZE).get(ATTR_OPERATION_LIST, []) or DEFAULT_OPERATION_LIST
     fan_list = config.get(CONF_CUSTOMIZE).get(ATTR_FAN_LIST, []) or DEFAULT_FAN_MODE_LIST
+    swing_list = config.get(CONF_CUSTOMIZE).get(ATTR_SWING_LIST, []) or DEFAULT_SWING_MODE_LIST
     default_operation = config.get(ATTR_OPERATION_MODE)
     default_fan_mode = config.get(ATTR_FAN_MODE)
+    default_swing_mode = config.get(ATTR_SWING_MODE)
 
     temp_entity_id = config.get(CONF_TEMP_SENSOR)
     power_template = config.get(CONF_POWER_TEMPLATE)
@@ -95,13 +106,13 @@ def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
 
     async_add_devices([
         RemoteClimate(hass, name, remote_entity_id, ircodes_ini, min_temp, max_temp, target_temp, target_temp_step,
-                      operation_list, fan_list, default_operation, default_fan_mode, temp_entity_id, power_template)
+                      operation_list, fan_list, swing_list, default_operation, default_fan_mode, default_swing_mode, temp_entity_id, power_template)
     ])
 
 
 class RemoteClimate(ClimateDevice):
     def __init__(self, hass, name, remote_entity_id, ircodes_ini, min_temp, max_temp, target_temp, target_temp_step,
-                 operation_list, fan_list, default_operation, default_fan_mode, temp_entity_id, power_template):
+                 operation_list, fan_list, swing_list, default_operation, default_fan_mode, default_swing_mode, temp_entity_id, power_template):
 
         self.hass = hass
         self._name = name
@@ -117,6 +128,7 @@ class RemoteClimate(ClimateDevice):
         self._current_temperature = None
         self._current_operation = default_operation
         self._current_fan_mode = default_fan_mode
+        self._current_swing_mode = default_swing_mode
 
         self._temp_entity_id = temp_entity_id
         self._power_template = power_template
@@ -126,6 +138,7 @@ class RemoteClimate(ClimateDevice):
 
         self._operation_list = operation_list
         self._fan_list = fan_list
+        self._swing_list = swing_list
 
         self._support_flags = SUPPORT_ON_OFF | SUPPORT_TARGET_TEMPERATURE | SUPPORT_OPERATION_MODE | SUPPORT_FAN_MODE
         self._enabled_flags = SUPPORT_ON_OFF
@@ -134,6 +147,12 @@ class RemoteClimate(ClimateDevice):
             self._commands_ini.get(SECTION_IDLE, COMMAND_IDLE)
             self._support_flags = self._support_flags | SUPPORT_AWAY_MODE
         except (NoOptionError, NoSectionError):
+            pass
+
+        try:
+            self._commands_ini.items(SECTION_SWING)
+            self._support_flags = self._support_flags | SUPPORT_SWING_MODE
+        except NoSectionError:
             pass
 
         if temp_entity_id:
@@ -231,9 +250,17 @@ class RemoteClimate(ClimateDevice):
         return self._fan_list
 
     @property
+    def current_swing_mode(self):
+        return self._current_swing_mode
+
+    @property
+    def swing_list(self):
+        return self._swing_list
+
+    @property
     def state_attributes(self):
         data = super().state_attributes
-        data['power'] = STATE_ON if self._on else STATE_OFF
+        data[ATTR_POWER] = STATE_ON if self._on else STATE_OFF
         return data
 
     @property
@@ -272,9 +299,18 @@ class RemoteClimate(ClimateDevice):
 
         return command
 
+    def send_command(self, command):
+        remote.send_command(self.hass, 'raw:' + command, entity_id=self._remote_entity_id)
+
     def send_ir(self):
         command = self.update_flags_get_command()
-        remote.send_command(self.hass, 'raw:' + command, entity_id=self._remote_entity_id)
+        self.send_command(command)
+
+    def send_ir_swing(self):
+        section = SECTION_SWING
+        value = self._current_swing_mode.lower()
+        command = self._commands_ini.get(section, value)
+        self.send_command(command)
 
     def set_temperature(self, **kwargs):
         if kwargs.get(ATTR_TEMPERATURE) is not None:
@@ -285,6 +321,11 @@ class RemoteClimate(ClimateDevice):
     def set_fan_mode(self, fan):
         self._current_fan_mode = fan
         self.send_ir()
+        self.schedule_update_ha_state()
+
+    def set_swing_mode(self, swing_mode):
+        self._current_swing_mode = swing_mode
+        self.send_ir_swing()
         self.schedule_update_ha_state()
 
     def set_operation_mode(self, operation_mode):
@@ -319,9 +360,10 @@ class RemoteClimate(ClimateDevice):
         state = yield from async_get_last_state(self.hass, self.entity_id)
 
         if state is not None:
-            self._current_operation = state.attributes.get('operation_mode', self._current_operation)
-            self._target_temperature = state.attributes.get('temperature', self._target_temperature)
-            self._enabled_flags = state.attributes.get('supported_features', self._enabled_flags)
-            self._current_fan_mode = state.attributes.get('fan_mode', self._current_fan_mode)
-            self._on = state.attributes.get('power', STATE_OFF) == STATE_ON
-            self._away = state.attributes.get('away_mode', STATE_OFF) == STATE_ON
+            self._current_operation = state.attributes.get(ATTR_OPERATION_MODE, self._current_operation)
+            self._target_temperature = state.attributes.get(ATTR_TEMPERATURE, self._target_temperature)
+            self._enabled_flags = state.attributes.get(ATTR_SUPPORTED_FEATURES, self._enabled_flags)
+            self._current_fan_mode = state.attributes.get(ATTR_FAN_MODE, self._current_fan_mode)
+            self._current_swing_mode = state.attributes.get(ATTR_SWING_MODE, self._current_swing_mode)
+            self._on = state.attributes.get(ATTR_POWER, STATE_OFF) == STATE_ON
+            self._away = state.attributes.get(ATTR_AWAY_MODE, STATE_OFF) == STATE_ON
