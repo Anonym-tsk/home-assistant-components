@@ -78,6 +78,8 @@ sensor:
 
 Component provides two sensors - temperature and CO2 from [USB CO2 monitor](https://habr.com/company/masterkit/blog/248403/)
 
+**Component works only with Home Assistant in [official docker container](https://hub.docker.com/r/homeassistant/home-assistant/) or on debian-based systems, because it installs libusb-1.0-0-dev from apt**
+
 #### Example:
 ```
 sensor:
