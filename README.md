@@ -18,7 +18,8 @@
 | `target_temp_step` | no | Set target temperature step (default: 1) |
 | `operation_mode` | no | Set initial default operation mode (default: cool) |
 | `fan_mode` | no | Set initial default fan mode (default: auto) |
-| `customize`<br/>`- operation_list`<br/>`- fan_list` | no | List of options to customize<br/>- List of operation modes (default: heat, cool, auto)<br/>- List of fan modes (default: low, medium, high, auto) |
+| `swing_mode` | no | Set initial default swing mode (default: off) |
+| `customize`<br/>`- operation_list`<br/>`- fan_list`<br/>`- swing_list` | no | List of options to customize<br/>- List of operation modes (default: heat, cool, auto)<br/>- List of fan modes (default: low, medium, high, auto)<br/> - List of swing modes (default: off, auto) |
 
 #### Basic Example:
 ```
@@ -44,6 +45,7 @@ climate:
     target_temp_step: 1
     operation_mode: cool
     fan_mode: auto
+    swing_mode: auto
     customize:
       operation_list:
         - cool
@@ -55,6 +57,9 @@ climate:
         - low
         - medium
         - high
+        - auto
+      swing_list:
+        - 'off'
         - auto
 ```
 
