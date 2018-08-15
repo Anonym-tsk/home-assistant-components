@@ -9,12 +9,6 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
-    from subprocess import STDOUT, check_call
-    import os
-
-    check_call(['apt-get', 'update'], stdout=open(os.devnull, 'wb'), stderr=STDOUT)
-    check_call(['apt-get', 'install', '-y', 'libusb-1.0-0-dev'], stdout=open(os.devnull, 'wb'), stderr=STDOUT)
-
     device = Device()
 
     add_devices([
