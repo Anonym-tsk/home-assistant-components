@@ -8,7 +8,7 @@
 | Variable |  Required  | Description |
 | -------- | ---------- | ----------- |
 | `remote` | yes | **entity_id** of the Xiaomi IR Remote device |
-| `ircodes_ini` | yes | The path of ir codes ini file |
+| `commands` | yes | Commands list (see below) |
 | `name` | no | Name of climate component |
 | `temp_sensor` | no | **entity_id** for a temperature sensor, **temp_sensor.state must be temperature** |
 | `power_template` | no | **template** that returns status of climete, **must returns boolean value** |
@@ -27,7 +27,7 @@ climate:
   - platform: xiaomi_remote
     name: Air Conditioner
     remote: remote.xiaomi_miio_192_168_10_101
-    ircodes_ini: 'custom_components/climate/Roda-YKR-H-102E.ini'
+    commands: !include Roda-YKR-H-102E.yaml
 ```
 
 #### Custom Example:
@@ -36,7 +36,7 @@ climate:
   - platform: xiaomi_remote
     name: Air Conditioner
     remote: remote.xiaomi_miio_192_168_10_101
-    ircodes_ini: 'custom_components/climate/Roda-YKR-H-102E.ini'
+    commands: !include Roda-YKR-H-102E.yaml
     temp_sensor: sensor.co2mon_temperature
     power_template: "{{ states('sensor.plug_power_158d0002366887') | float > 50 }}"
     min_temp: 16
@@ -63,10 +63,32 @@ climate:
         - auto
 ```
 
-#### How to make your configuration INI file
+#### How to make your configuration YAML file
 * Use [`remote.xiaomi_miio_learn_command`](https://www.home-assistant.io/components/remote.xiaomi_miio/#remotexiaomi_miio_learn_command) to get commands from your remote.
-* Create INI file same as `Roda-YKR-H-102E.ini` with your commands.
+* Create YAML file same as `Roda-YKR-H-102E.yaml` with your commands.
+  * Required command `off` (`'off': <command>`)
+  * Optional command `idle` (`idle: <command>`)
+  * Optional command `swing` (`swing/swing_mode: <command>`)
+  * Other commands: `operation/fan_mode/temperature` (available nesting: `operation/fan_mode/temperature`, `operation/fan_mode`, `operation`)
+  * `'off'` commands must be in quotes
 
+Example:
+```
+'off': <raw_command>
+idle: <raw_command>
+swing:
+  'off': <raw_command>
+  auto: <raw_command>
+cool:
+  low:
+    16: <raw_command>
+    17: <raw_command>
+    ...
+heat:
+  low: <raw_command>
+  high: <raw_command>
+dry: <raw_command>
+```
 
 ## Xiaomi Plug Power Sensor
 
