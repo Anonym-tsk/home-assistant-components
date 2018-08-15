@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os.path
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 import homeassistant.components.remote as remote
@@ -10,13 +9,13 @@ from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA,
                                               ATTR_OPERATION_MODE, ATTR_OPERATION_LIST, ATTR_MAX_TEMP, ATTR_MIN_TEMP,
                                               ATTR_CURRENT_TEMPERATURE, ATTR_TARGET_TEMP_STEP, ATTR_FAN_MODE,
                                               ATTR_FAN_LIST, ATTR_SWING_MODE, ATTR_SWING_LIST, ATTR_AWAY_MODE,
-                                              SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE, SUPPORT_FAN_MODE, SUPPORT_SWING_MODE,
-                                              SUPPORT_ON_OFF, SUPPORT_AWAY_MODE)
+                                              SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE, SUPPORT_FAN_MODE,
+                                              SUPPORT_SWING_MODE, SUPPORT_ON_OFF, SUPPORT_AWAY_MODE)
 from homeassistant.const import (ATTR_UNIT_OF_MEASUREMENT, ATTR_TEMPERATURE, CONF_NAME, CONF_CUSTOMIZE)
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.restore_state import async_get_last_state
 from homeassistant.core import callback
-from configparser import (ConfigParser, NoOptionError, NoSectionError)
+from voluptuous import ALLOW_EXTRA
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,8 +24,8 @@ DEPENDENCIES = ['remote']
 CONF_REMOTE = 'remote'
 CONF_TEMP_SENSOR = 'temp_sensor'
 CONF_POWER_TEMPLATE = 'power_template'
-CONF_IRCODES_INI = 'ircodes_ini'
 CONF_TARGET_TEMP = 'target_temp'
+CONF_COMMANDS = 'commands'
 
 DEFAULT_NAME = 'Xiaomi Remote Climate'
 DEFAULT_MIN_TEMP = 16
@@ -43,12 +42,9 @@ DEFAULT_SWING_MODE = 'off'
 ATTR_POWER = 'power'
 ATTR_SUPPORTED_FEATURES = 'supported_features'
 
-
-SECTION_IDLE = 'idle'
-COMMAND_IDLE = 'idle_command'
-SECTION_POWER_OFF = 'off'
-COMMAND_POWER_OFF = 'off_command'
-SECTION_SWING = 'swing'
+COMMAND_POWER_OFF = 'off'
+COMMAND_IDLE = 'idle'
+COMMAND_SWING = 'swing'
 
 CUSTOMIZE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_OPERATION_LIST): vol.All(cv.ensure_list, [cv.string]),
@@ -56,12 +52,17 @@ CUSTOMIZE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_SWING_LIST): vol.All(cv.ensure_list, [cv.string])
 })
 
+COMMANDS_SCHEMA = vol.Schema({
+    vol.Required(COMMAND_POWER_OFF): cv.string,
+    vol.Optional(COMMAND_IDLE): cv.string,
+    vol.Optional(COMMAND_SWING): vol.All({cv.slug: cv.string})
+}, extra=ALLOW_EXTRA)
+
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
     vol.Required(CONF_REMOTE): cv.entity_id,
     vol.Optional(CONF_TEMP_SENSOR): cv.entity_id,
     vol.Optional(CONF_POWER_TEMPLATE): cv.template,
-    vol.Required(CONF_IRCODES_INI): cv.string,
     vol.Optional(ATTR_MIN_TEMP, default=DEFAULT_MIN_TEMP): cv.positive_int,
     vol.Optional(ATTR_MAX_TEMP, default=DEFAULT_MAX_TEMP): cv.positive_int,
     vol.Optional(CONF_TARGET_TEMP, default=DEFAULT_TARGET_TEMP): cv.positive_int,
@@ -69,14 +70,16 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(ATTR_OPERATION_MODE, default=DEFAULT_OPERATION): cv.string,
     vol.Optional(ATTR_FAN_MODE, default=DEFAULT_FAN_MODE): cv.string,
     vol.Optional(ATTR_SWING_MODE, default=DEFAULT_SWING_MODE): cv.string,
-    vol.Optional(CONF_CUSTOMIZE, default={}): CUSTOMIZE_SCHEMA
+    vol.Optional(CONF_CUSTOMIZE, default={}): CUSTOMIZE_SCHEMA,
+    vol.Required(CONF_COMMANDS): COMMANDS_SCHEMA
 })
+
 
 @asyncio.coroutine
 def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     name = config.get(CONF_NAME)
     remote_entity_id = config.get(CONF_REMOTE)
-    ircodes_ini_file = config.get(CONF_IRCODES_INI)
+    commands = config.get(CONF_COMMANDS)
 
     min_temp = config.get(ATTR_MIN_TEMP)
     max_temp = config.get(ATTR_MAX_TEMP)
@@ -92,32 +95,22 @@ def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     temp_entity_id = config.get(CONF_TEMP_SENSOR)
     power_template = config.get(CONF_POWER_TEMPLATE)
 
-    if ircodes_ini_file.startswith("/"):
-        ircodes_ini_file = ircodes_ini_file[1:]
-
-    ircodes_ini_path = hass.config.path(ircodes_ini_file)
-
-    if os.path.exists(ircodes_ini_path):
-        ircodes_ini = ConfigParser()
-        ircodes_ini.read(ircodes_ini_path)
-    else:
-        _LOGGER.error("The ini file was not found. (" + ircodes_ini_path + ")")
-        return
-
     async_add_devices([
-        RemoteClimate(hass, name, remote_entity_id, ircodes_ini, min_temp, max_temp, target_temp, target_temp_step,
-                      operation_list, fan_list, swing_list, default_operation, default_fan_mode, default_swing_mode, temp_entity_id, power_template)
+        RemoteClimate(hass, name, remote_entity_id, commands, min_temp, max_temp, target_temp, target_temp_step,
+                      operation_list, fan_list, swing_list, default_operation, default_fan_mode, default_swing_mode,
+                      temp_entity_id, power_template)
     ])
 
 
 class RemoteClimate(ClimateDevice):
-    def __init__(self, hass, name, remote_entity_id, ircodes_ini, min_temp, max_temp, target_temp, target_temp_step,
-                 operation_list, fan_list, swing_list, default_operation, default_fan_mode, default_swing_mode, temp_entity_id, power_template):
+    def __init__(self, hass, name, remote_entity_id, commands, min_temp, max_temp, target_temp, target_temp_step,
+                 operation_list, fan_list, swing_list, default_operation, default_fan_mode, default_swing_mode,
+                 temp_entity_id, power_template):
 
         self.hass = hass
         self._name = name
         self._remote_entity_id = remote_entity_id
-        self._commands_ini = ircodes_ini
+        self._commands = commands
 
         self._min_temp = min_temp
         self._max_temp = max_temp
@@ -143,17 +136,11 @@ class RemoteClimate(ClimateDevice):
         self._support_flags = SUPPORT_ON_OFF | SUPPORT_TARGET_TEMPERATURE | SUPPORT_OPERATION_MODE | SUPPORT_FAN_MODE
         self._enabled_flags = SUPPORT_ON_OFF
 
-        try:
-            self._commands_ini.get(SECTION_IDLE, COMMAND_IDLE)
+        if COMMAND_IDLE in commands:
             self._support_flags = self._support_flags | SUPPORT_AWAY_MODE
-        except (NoOptionError, NoSectionError):
-            pass
 
-        try:
-            self._commands_ini.items(SECTION_SWING)
+        if COMMAND_SWING in commands:
             self._support_flags = self._support_flags | SUPPORT_SWING_MODE
-        except NoSectionError:
-            pass
 
         if temp_entity_id:
             async_track_state_change(hass, temp_entity_id, self._async_temp_changed)
@@ -277,25 +264,29 @@ class RemoteClimate(ClimateDevice):
 
     def update_flags_get_command(self):
         if not self._on:
-            section = SECTION_POWER_OFF
-            value = COMMAND_POWER_OFF
-            command = self._commands_ini.get(section, value)
+            command = self._commands[COMMAND_POWER_OFF]
             self._enabled_flags = SUPPORT_ON_OFF
         elif self._away:
-            section = SECTION_IDLE
-            value = COMMAND_IDLE
-            command = self._commands_ini.get(section, value)
+            command = self._commands[COMMAND_IDLE]
             self._enabled_flags = SUPPORT_ON_OFF | SUPPORT_AWAY_MODE
         else:
-            section = self._current_operation.lower()
+            operation = self._current_operation.lower()
+            fan_mode = self._current_fan_mode.lower()
+            temp = int(self._target_temperature)
+
             try:
-                value = self._current_fan_mode.lower() + "_" + str(int(self._target_temperature))
-                command = self._commands_ini.get(section, value)
-                self._enabled_flags = self._support_flags
-            except NoOptionError:
-                value = self._current_fan_mode.lower()
-                command = self._commands_ini.get(section, value)
-                self._enabled_flags = self._support_flags ^ SUPPORT_TARGET_TEMPERATURE
+                if isinstance(self._commands[operation], str):
+                    command = self._commands[operation]
+                    self._enabled_flags = self._support_flags ^ SUPPORT_TARGET_TEMPERATURE ^ SUPPORT_FAN_MODE
+                elif isinstance(self._commands[operation][fan_mode], str):
+                    command = self._commands[operation][fan_mode]
+                    self._enabled_flags = self._support_flags ^ SUPPORT_TARGET_TEMPERATURE
+                else:
+                    command = self._commands[operation][fan_mode][temp]
+                    self._enabled_flags = self._support_flags
+            except KeyError:
+                command = None
+                _LOGGER.error('Could not find command for %s/%s/%s', operation, fan_mode, temp)
 
         return command
 
@@ -304,13 +295,17 @@ class RemoteClimate(ClimateDevice):
 
     def send_ir(self):
         command = self.update_flags_get_command()
-        self.send_command(command)
+        if command is not None:
+            self.send_command(command)
 
     def send_ir_swing(self):
-        section = SECTION_SWING
-        value = self._current_swing_mode.lower()
-        command = self._commands_ini.get(section, value)
-        self.send_command(command)
+        swing_mode = self._current_swing_mode.lower()
+
+        try:
+            command = self._commands[COMMAND_SWING][swing_mode]
+            self.send_command(command)
+        except KeyError:
+            _LOGGER.error('Could not find command for %s/%s', COMMAND_SWING, swing_mode)
 
     def set_temperature(self, **kwargs):
         if kwargs.get(ATTR_TEMPERATURE) is not None:
