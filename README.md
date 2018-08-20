@@ -18,8 +18,7 @@
 | `target_temp_step` | no | Set target temperature step (default: 1) |
 | `operation_mode` | no | Set initial default operation mode (default: cool) |
 | `fan_mode` | no | Set initial default fan mode (default: auto) |
-| `swing_mode` | no | Set initial default swing mode (default: off) |
-| `customize`<br/>`- operation_list`<br/>`- fan_list`<br/>`- swing_list` | no | List of options to customize<br/>- List of operation modes (default: heat, cool, auto)<br/>- List of fan modes (default: low, medium, high, auto)<br/> - List of swing modes (default: off, auto) |
+| `customize`<br/>`- operation_list`<br/>`- fan_list` | no | List of options to customize<br/>- List of operation modes (default: heat, cool, auto)<br/>- List of fan modes (default: low, medium, high, auto) |
 
 #### Basic Example:
 ```
@@ -45,7 +44,6 @@ climate:
     target_temp_step: 1
     operation_mode: cool
     fan_mode: auto
-    swing_mode: auto
     customize:
       operation_list:
         - cool
@@ -58,9 +56,6 @@ climate:
         - medium
         - high
         - auto
-      swing_list:
-        - 'off'
-        - auto
 ```
 
 #### How to make your configuration YAML file
@@ -68,7 +63,6 @@ climate:
 * Create YAML file same as `Roda-YKR-H-102E.yaml` with your commands.
   * Required command `off` (`'off': <command>`)
   * Optional command `idle` (`idle: <command>`)
-  * Optional command `swing` (`swing/swing_mode: <command>`)
   * Other commands: `operation/fan_mode/temperature` (available nesting: `operation/fan_mode/temperature`, `operation/fan_mode`, `operation`)
   * `'off'` commands must be in quotes
 
@@ -76,9 +70,6 @@ Example:
 ```
 'off': <raw_command>
 idle: <raw_command>
-swing:
-  'off': <raw_command>
-  auto: <raw_command>
 cool:
   low:
     16: <raw_command>
