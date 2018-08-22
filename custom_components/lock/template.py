@@ -8,6 +8,7 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.core import callback
 from homeassistant.components.lock import (LockDevice, PLATFORM_SCHEMA)
 from homeassistant.const import (CONF_NAME, CONF_OPTIMISTIC, CONF_VALUE_TEMPLATE, EVENT_HOMEASSISTANT_START)
+from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.script import Script
 
@@ -45,7 +46,7 @@ def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
 
 class TemplateLock(LockDevice):
     def __init__(self, hass, name, value_template, command_lock, command_unlock, optimistic):
-        self._state = False
+        self._state = None
         self._hass = hass
         self._name = name
         self._state_template = value_template
@@ -58,14 +59,14 @@ class TemplateLock(LockDevice):
     def async_added_to_hass(self):
         @callback
         def template_lock_state_listener(entity, old_state, new_state):
-            self.async_schedule_update_ha_state(True)
+            self.update_state()
 
         @callback
         def template_lock_startup(event):
-            async_track_state_change(self.hass, self._state_entities, template_lock_state_listener)
-            self.async_schedule_update_ha_state(True)
+            async_track_state_change(self._hass, self._state_entities, template_lock_state_listener)
+            self.update_state()
 
-        self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, template_lock_startup)
+        self._hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, template_lock_startup)
 
     @property
     def assumed_state(self):
@@ -82,6 +83,14 @@ class TemplateLock(LockDevice):
     @property
     def is_locked(self):
         return self._state
+
+    def update_state(self):
+        try:
+            self._state = self._state_template.async_render().lower() in ('true', 'on', '1', 'locked')
+        except TemplateError as ex:
+            self._state = None
+            _LOGGER.error('Could not render template %s: %s', self._name, ex)
+        self.async_schedule_update_ha_state(True)
 
     @asyncio.coroutine
     def async_lock(self, **kwargs):
