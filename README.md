@@ -98,11 +98,10 @@ Component provides two sensors - temperature and CO2 from [USB CO2 monitor](http
 
 #### Requirements
 The `libusb` library must be installed.<br/>
-On linux (including Raspberry Pi) you can install it from `apt`:
+On linux (including Raspberry Pi) and [official docker container](https://hub.docker.com/r/homeassistant/home-assistant/) you can install it from `apt`:
 ```
 sudo apt-get install libusb-1.0-0-dev
 ```
-It already installed in [official docker container](https://hub.docker.com/r/homeassistant/home-assistant/)
 
 #### Example:
 ```
