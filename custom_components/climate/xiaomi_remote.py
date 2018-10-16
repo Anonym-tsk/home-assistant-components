@@ -1,21 +1,23 @@
-import asyncio
 import logging
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
-import homeassistant.components.remote as remote
 
-from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA,
-                                              STATE_ON, STATE_OFF, STATE_IDLE, STATE_HEAT, STATE_COOL, STATE_AUTO,
-                                              ATTR_OPERATION_MODE, ATTR_OPERATION_LIST, ATTR_MAX_TEMP, ATTR_MIN_TEMP,
-                                              ATTR_CURRENT_TEMPERATURE, ATTR_TARGET_TEMP_STEP, ATTR_FAN_MODE,
-                                              ATTR_FAN_LIST, ATTR_AWAY_MODE,
-                                              SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE, SUPPORT_FAN_MODE,
-                                              SUPPORT_ON_OFF, SUPPORT_AWAY_MODE)
-from homeassistant.const import (ATTR_UNIT_OF_MEASUREMENT, ATTR_TEMPERATURE, CONF_NAME, CONF_CUSTOMIZE)
+from homeassistant.components.climate import (
+    ClimateDevice, PLATFORM_SCHEMA,
+    STATE_ON, STATE_OFF, STATE_HEAT, STATE_COOL, STATE_AUTO,
+    ATTR_OPERATION_MODE, ATTR_OPERATION_LIST, ATTR_MAX_TEMP, ATTR_MIN_TEMP,
+    ATTR_TARGET_TEMP_STEP, ATTR_FAN_MODE, ATTR_FAN_LIST, ATTR_AWAY_MODE,
+    SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE, SUPPORT_FAN_MODE,
+    SUPPORT_ON_OFF, SUPPORT_AWAY_MODE)
+from homeassistant.components.remote import (
+    ATTR_COMMAND, DOMAIN, SERVICE_SEND_COMMAND)
+from homeassistant.const import (
+    ATTR_UNIT_OF_MEASUREMENT, ATTR_TEMPERATURE, ATTR_ENTITY_ID,
+    CONF_NAME, CONF_CUSTOMIZE)
+from homeassistant.core import callback
+from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.restore_state import async_get_last_state
-from homeassistant.core import callback
-from voluptuous import ALLOW_EXTRA
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,7 +53,7 @@ CUSTOMIZE_SCHEMA = vol.Schema({
 COMMANDS_SCHEMA = vol.Schema({
     vol.Required(COMMAND_POWER_OFF): cv.string,
     vol.Optional(COMMAND_IDLE): cv.string
-}, extra=ALLOW_EXTRA)
+}, extra=vol.ALLOW_EXTRA)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
@@ -69,8 +71,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 })
 
 
-@asyncio.coroutine
-def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
+async def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     name = config.get(CONF_NAME)
     remote_entity_id = config.get(CONF_REMOTE)
     commands = config.get(CONF_COMMANDS)
@@ -128,50 +129,39 @@ class RemoteClimate(ClimateDevice):
             self._support_flags = self._support_flags | SUPPORT_AWAY_MODE
 
         if temp_entity_id:
-            async_track_state_change(hass, temp_entity_id, self._async_temp_changed)
-
-            temp_state = hass.states.get(temp_entity_id)
-            if temp_state:
-                self._async_update_current_temp(temp_state)
+            async_track_state_change(hass, temp_entity_id, self._temp_changed_listener)
 
         if power_template:
             power_template.hass = hass
             power_entity_ids = power_template.extract_entities()
-            async_track_state_change(hass, power_entity_ids, self._async_power_changed)
-            self._async_update_current_power()
+            async_track_state_change(hass, power_entity_ids, self._power_changed_listener)
 
-    @asyncio.coroutine
-    def _async_temp_changed(self, entity_id, old_state, new_state):
+    @callback
+    def _temp_changed_listener(self, entity_id, old_state, new_state):
         if new_state is None:
             return
 
-        self._async_update_current_temp(new_state)
-        yield from self.async_update_ha_state()
-
-    @callback
-    def _async_update_current_temp(self, state):
-        unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
+        unit = new_state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
         try:
-            self._current_temperature = self.hass.config.units.temperature(float(state.state), unit)
+            self._current_temperature = self.hass.config.units.temperature(float(new_state.state), unit)
         except ValueError as ex:
             self._current_temperature = None
-            _LOGGER.warn('Unable to update temperature from sensor: %s', ex)
+            _LOGGER.warning('Unable to update temperature from sensor: %s', ex)
 
-    @asyncio.coroutine
-    def _async_power_changed(self, entity_id, old_state, new_state):
+        self.async_schedule_update_ha_state(True)
+
+    @callback
+    def _power_changed_listener(self, entity_id, old_state, new_state):
         if new_state is None:
             return
 
-        self._async_update_current_power()
-        self.schedule_update_ha_state()
-
-    @callback
-    def _async_update_current_power(self):
         try:
             self._on = self._power_template.async_render().lower() in ('true', 'on', '1')
-            self.update_flags_get_command()
+            self._update_flags_get_command()
         except TemplateError as ex:
-            _LOGGER.warn('Unable to update power from template: %s', ex)
+            _LOGGER.warning('Unable to update power from template: %s', ex)
+
+        self.async_schedule_update_ha_state(True)
 
     @property
     def should_poll(self):
@@ -239,7 +229,7 @@ class RemoteClimate(ClimateDevice):
     def supported_features(self):
         return self._enabled_flags
 
-    def update_flags_get_command(self):
+    def _update_flags_get_command(self):
         if not self._on:
             command = self._commands[COMMAND_POWER_OFF]
             self._enabled_flags = SUPPORT_ON_OFF
@@ -267,55 +257,57 @@ class RemoteClimate(ClimateDevice):
 
         return command
 
-    def send_command(self, command):
-        remote.send_command(self.hass, 'raw:' + command, entity_id=self._remote_entity_id)
+    def _send_command(self, command):
+        self.hass.services.call(DOMAIN, SERVICE_SEND_COMMAND, {
+            ATTR_COMMAND: 'raw:' + command,
+            ATTR_ENTITY_ID: self._remote_entity_id
+        })
 
-    def send_ir(self):
-        command = self.update_flags_get_command()
+    def _send_ir(self):
+        command = self._update_flags_get_command()
         if command is not None:
-            self.send_command(command)
+            self._send_command(command)
 
     def set_temperature(self, **kwargs):
         if kwargs.get(ATTR_TEMPERATURE) is not None:
             self._target_temperature = kwargs.get(ATTR_TEMPERATURE)
-            self.send_ir()
+            self._send_ir()
             self.schedule_update_ha_state()
 
     def set_fan_mode(self, fan):
         self._current_fan_mode = fan
-        self.send_ir()
+        self._send_ir()
         self.schedule_update_ha_state()
 
     def set_operation_mode(self, operation_mode):
         self._current_operation = operation_mode
-        self.send_ir()
+        self._send_ir()
         self.schedule_update_ha_state()
 
     def turn_on(self):
         self._on = True
         self._away = False
-        self.send_ir()
+        self._send_ir()
         self.schedule_update_ha_state()
 
     def turn_off(self):
         self._on = False
         self._away = False
-        self.send_ir()
+        self._send_ir()
         self.schedule_update_ha_state()
 
     def turn_away_mode_on(self):
         self._away = True
-        self.send_ir()
+        self._send_ir()
         self.schedule_update_ha_state()
 
     def turn_away_mode_off(self):
         self._away = False
-        self.send_ir()
+        self._send_ir()
         self.schedule_update_ha_state()
 
-    @asyncio.coroutine
-    def async_added_to_hass(self):
-        state = yield from async_get_last_state(self.hass, self.entity_id)
+    async def async_added_to_hass(self):
+        state = await async_get_last_state(self.hass, self.entity_id)
 
         if state is not None:
             self._current_operation = state.attributes.get(ATTR_OPERATION_MODE, self._current_operation)
@@ -324,3 +316,5 @@ class RemoteClimate(ClimateDevice):
             self._current_fan_mode = state.attributes.get(ATTR_FAN_MODE, self._current_fan_mode)
             self._on = state.attributes.get(ATTR_POWER, STATE_OFF) == STATE_ON
             self._away = state.attributes.get(ATTR_AWAY_MODE, STATE_OFF) == STATE_ON
+
+        self.async_schedule_update_ha_state(True)
