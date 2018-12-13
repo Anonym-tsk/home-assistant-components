@@ -17,7 +17,7 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.event import async_track_state_change
-from homeassistant.helpers.restore_state import async_get_last_state
+from homeassistant.helpers.restore_state import RestoreEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -71,7 +71,8 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 })
 
 
-async def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
+async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
+    """Set up the xiaomi remote climate platform."""
     name = config.get(CONF_NAME)
     remote_entity_id = config.get(CONF_REMOTE)
     commands = config.get(CONF_COMMANDS)
@@ -88,15 +89,16 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info=N
     temp_entity_id = config.get(CONF_TEMP_SENSOR)
     power_template = config.get(CONF_POWER_TEMPLATE)
 
-    async_add_devices([
+    async_add_entities([
         RemoteClimate(hass, name, remote_entity_id, commands, min_temp, max_temp, target_temp, target_temp_step,
                       operation_list, fan_list, default_operation, default_fan_mode, temp_entity_id, power_template)
     ])
 
 
-class RemoteClimate(ClimateDevice):
+class RemoteClimate(ClimateDevice, RestoreEntity):
     def __init__(self, hass, name, remote_entity_id, commands, min_temp, max_temp, target_temp, target_temp_step,
                  operation_list, fan_list, default_operation, default_fan_mode, temp_entity_id, power_template):
+        """Representation of a Xiaomi Remote Climate device."""
 
         self.hass = hass
         self._name = name
@@ -138,6 +140,7 @@ class RemoteClimate(ClimateDevice):
 
     @callback
     def _temp_changed_listener(self, entity_id, old_state, new_state):
+        """Update current temperature."""
         if new_state is None:
             return
 
@@ -152,6 +155,7 @@ class RemoteClimate(ClimateDevice):
 
     @callback
     def _power_changed_listener(self, entity_id, old_state, new_state):
+        """Update current power."""
         if new_state is None:
             return
 
@@ -165,71 +169,88 @@ class RemoteClimate(ClimateDevice):
 
     @property
     def should_poll(self):
+        """Return the polling state."""
         return False
 
     @property
     def name(self):
+        """Return the name of the climate device."""
         return self._name
 
     @property
     def temperature_unit(self):
+        """Return the unit of measurement."""
         return self._unit_of_measurement
 
     @property
     def current_temperature(self):
+        """Return the sensor temperature."""
         return self._current_temperature
 
     @property
     def min_temp(self):
+        """Return the minimum temperature."""
         return self._min_temp
 
     @property
     def max_temp(self):
+        """Return the maximum temperature."""
         return self._max_temp
 
     @property
     def target_temperature(self):
+        """Return the temperature we try to reach."""
         return self._target_temperature
 
     @property
     def target_temperature_step(self):
+        """Return the supported step of target temperature."""
         return self._target_temperature_step
 
     @property
     def current_operation(self):
+        """Return current operation ie. heat, cool, idle."""
         return self._current_operation
 
     @property
     def operation_list(self):
+        """Return the list of available operation modes."""
         return self._operation_list
 
     @property
     def current_fan_mode(self):
+        """Return the fan setting."""
         return self._current_fan_mode
 
     @property
     def fan_list(self):
+        """Return the list of available fan modes."""
         return self._fan_list
 
     @property
     def state_attributes(self):
+        """Return the optional state attributes."""
         data = super().state_attributes
         data[ATTR_POWER] = STATE_ON if self._on else STATE_OFF
         return data
 
     @property
     def is_on(self):
+        """Return true if on."""
         return self._on
 
     @property
     def is_away_mode_on(self):
+        """Return true if away mode is on."""
         return self._away
 
     @property
     def supported_features(self):
+        """Return the list of supported features."""
         return self._enabled_flags
 
     def _update_flags_get_command(self):
+        """Update supported features list."""
         if not self._on:
             command = self._commands[COMMAND_POWER_OFF]
             self._enabled_flags = SUPPORT_ON_OFF
@@ -258,56 +279,67 @@ class RemoteClimate(ClimateDevice):
         return command
 
     def _send_command(self, command):
+        """Send command to device."""
         self.hass.services.call(DOMAIN, SERVICE_SEND_COMMAND, {
             ATTR_COMMAND: 'raw:' + command,
             ATTR_ENTITY_ID: self._remote_entity_id
         })
 
     def _send_ir(self):
+        """Send IR code to device."""
         command = self._update_flags_get_command()
         if command is not None:
             self._send_command(command)
 
     def set_temperature(self, **kwargs):
+        """Set new target temperature."""
         if kwargs.get(ATTR_TEMPERATURE) is not None:
             self._target_temperature = kwargs.get(ATTR_TEMPERATURE)
             self._send_ir()
             self.schedule_update_ha_state()
 
     def set_fan_mode(self, fan):
+        """Set new target fan mode."""
         self._current_fan_mode = fan
         self._send_ir()
         self.schedule_update_ha_state()
 
     def set_operation_mode(self, operation_mode):
+        """Set new target operation mode."""
         self._current_operation = operation_mode
         self._send_ir()
         self.schedule_update_ha_state()
 
     def turn_on(self):
+        """Turn device on."""
         self._on = True
         self._away = False
         self._send_ir()
         self.schedule_update_ha_state()
 
     def turn_off(self):
+        """Turn device off."""
         self._on = False
         self._away = False
         self._send_ir()
         self.schedule_update_ha_state()
 
     def turn_away_mode_on(self):
+        """Turn away mode on."""
         self._away = True
         self._send_ir()
         self.schedule_update_ha_state()
 
     def turn_away_mode_off(self):
+        """Turn away mode off."""
         self._away = False
         self._send_ir()
         self.schedule_update_ha_state()
 
     async def async_added_to_hass(self):
-        state = await async_get_last_state(self.hass, self.entity_id)
+        """Run when entity about to be added."""
+        await super().async_added_to_hass()
+        state = await self.async_get_last_state()
 
         if state is not None:
             self._current_operation = state.attributes.get(ATTR_OPERATION_MODE, self._current_operation)
