@@ -18,7 +18,7 @@
 | `target_temp_step` | no | Set target temperature step (default: 1) |
 | `operation_mode` | no | Set initial default operation mode (default: cool) |
 | `fan_mode` | no | Set initial default fan mode (default: auto) |
-| `customize`<br/>`- operation_list`<br/>`- fan_list` | no | List of options to customize<br/>- List of operation modes (default: heat, cool, auto)<br/>- List of fan modes (default: low, medium, high, auto) |
+| `customize`<br/>`- operation_list`<br/>`- fan_list` | no | List of options to customize<br/>- List of operation modes (default: off, heat, cool, auto)<br/>- List of fan modes (default: low, medium, high, auto) |
 
 #### Basic Example:
 ```
@@ -46,6 +46,7 @@ climate:
     fan_mode: auto
     customize:
       operation_list:
+        - 'off'
         - cool
         - heat
         - dry
@@ -62,14 +63,12 @@ climate:
 * Use [`remote.xiaomi_miio_learn_command`](https://www.home-assistant.io/components/remote.xiaomi_miio/#remotexiaomi_miio_learn_command) to get commands from your remote.
 * Create YAML file same as `Roda-YKR-H-102E.yaml` with your commands.
   * Required command `off` (`'off': <command>`)
-  * Optional command `idle` (`idle: <command>`)
-  * Other commands: `operation/fan_mode/temperature` (available nesting: `operation/fan_mode/temperature`, `operation/fan_mode`, `operation`)
+  * Optional commands: `operation/fan_mode/temperature` (available nesting: `operation/fan_mode/temperature`, `operation/fan_mode`, `operation`)
   * `'off'` commands must be in quotes
 
 Example:
 ```
 'off': <raw_command>
-idle: <raw_command>
 cool:
   low:
     16: <raw_command>
