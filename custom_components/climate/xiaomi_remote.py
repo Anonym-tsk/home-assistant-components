@@ -321,7 +321,7 @@ class RemoteClimate(ClimateDevice, RestoreEntity):
 
         if state is not None:
             self._last_operation = state.attributes.get(ATTR_LAST_OPERATION, self._default_operation)
-            self._current_operation = state.attributes.get(ATTR_LAST_OPERATION, self._last_operation)
+            self._current_operation = state.attributes.get(ATTR_OPERATION_MODE, self._last_operation)
             self._last_fan_mode = state.attributes.get(ATTR_LAST_FAN_MODE, self._default_fan_mode)
             self._current_fan_mode = state.attributes.get(ATTR_FAN_MODE, self._last_fan_mode)
             self._target_temperature = state.attributes.get(ATTR_TEMPERATURE, self._target_temperature)
