@@ -137,7 +137,7 @@ class RemoteClimate(ClimateDevice, RestoreEntity):
 
     async def _async_temp_changed(self, entity_id, old_state, new_state):
         """Update current temperature."""
-        if new_state is None:
+        if new_state is None or new_state.state == STATE_UNKNOWN:
             return
 
         self._async_update_temp(new_state)
