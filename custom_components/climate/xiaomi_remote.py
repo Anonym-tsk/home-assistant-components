@@ -13,7 +13,8 @@ from homeassistant.components.fan import (
 from homeassistant.components.remote import (
     ATTR_COMMAND, DOMAIN, SERVICE_SEND_COMMAND)
 from homeassistant.const import (
-    ATTR_TEMPERATURE, ATTR_ENTITY_ID, CONF_NAME, CONF_CUSTOMIZE)
+    ATTR_TEMPERATURE, ATTR_ENTITY_ID, CONF_NAME, CONF_CUSTOMIZE,
+    STATE_UNAVAILABLE)
 from homeassistant.core import callback
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.event import async_track_state_change
