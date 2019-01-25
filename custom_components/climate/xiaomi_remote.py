@@ -137,7 +137,7 @@ class RemoteClimate(ClimateDevice, RestoreEntity):
 
     async def _async_temp_changed(self, entity_id, old_state, new_state):
         """Update current temperature."""
-        if new_state is None or new_state.state == STATE_UNKNOWN:
+        if new_state is None or new_state.state in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
             return
 
         self._async_update_temp(new_state)
@@ -329,7 +329,7 @@ class RemoteClimate(ClimateDevice, RestoreEntity):
 
         if self._temp_entity_id:
             temp_state = self.hass.states.get(self._temp_entity_id)
-            if temp_state and temp_state.state != STATE_UNKNOWN:
+            if temp_state and temp_state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
                 self._async_update_temp(temp_state)
 
         if self._power_template:
