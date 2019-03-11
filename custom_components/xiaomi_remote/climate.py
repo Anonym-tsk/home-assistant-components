@@ -2,9 +2,9 @@ import logging
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 
-from homeassistant.components.climate import (
-    ClimateDevice, PLATFORM_SCHEMA,
-    STATE_OFF, STATE_HEAT, STATE_COOL, STATE_AUTO,
+from homeassistant.components.climate import ClimateDevice, PLATFORM_SCHEMA
+from homeassistant.components.climate.const import (
+    STATE_HEAT, STATE_COOL, STATE_AUTO,
     ATTR_OPERATION_MODE, ATTR_OPERATION_LIST, ATTR_MAX_TEMP, ATTR_MIN_TEMP,
     ATTR_TARGET_TEMP_STEP, ATTR_FAN_MODE, ATTR_FAN_LIST, SUPPORT_ON_OFF,
     SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE, SUPPORT_FAN_MODE)
@@ -14,7 +14,7 @@ from homeassistant.components.remote import (
     ATTR_COMMAND, DOMAIN, SERVICE_SEND_COMMAND)
 from homeassistant.const import (
     ATTR_TEMPERATURE, ATTR_ENTITY_ID, CONF_NAME, CONF_CUSTOMIZE,
-    STATE_UNAVAILABLE, STATE_UNKNOWN)
+    STATE_UNAVAILABLE, STATE_UNKNOWN, STATE_OFF)
 from homeassistant.core import callback
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.event import async_track_state_change
