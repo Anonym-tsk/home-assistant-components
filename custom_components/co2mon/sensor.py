@@ -3,8 +3,6 @@ import logging
 from homeassistant.const import (TEMP_CELSIUS, DEVICE_CLASS_TEMPERATURE)
 from homeassistant.helpers.entity import Entity
 
-REQUIREMENTS = ['CO2meter==0.2.5']
-
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -29,7 +27,7 @@ class Device():
                 from co2meter import CO2monitor
                 self._monitor = CO2monitor()
             except OSError:
-                _LOGGER.warn('Could not connect to CO2Monitor')
+                _LOGGER.warning('Could not connect to CO2Monitor')
                 return
 
         try:

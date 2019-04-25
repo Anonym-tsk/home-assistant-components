@@ -5,7 +5,6 @@ from homeassistant.components.xiaomi_aqara import PY_XIAOMI_GATEWAY
 
 _LOGGER = logging.getLogger(__name__)
 
-DEPENDENCIES = ['xiaomi_aqara']
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
     devices = []

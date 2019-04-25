@@ -1,0 +1,8 @@
+{
+  "domain": "xiaomi_plug_power",
+  "name": "Xiaomi Plug Power",
+  "documentation": "https://github.com/Anonym-tsk/home-assistant-components/blob/master/README.md",
+  "dependencies": ["xiaomi_aqara"],
+  "codeowners": ["@anonym-tsk"],
+  "requirements": []
+}

@@ -22,8 +22,6 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 _LOGGER = logging.getLogger(__name__)
 
-DEPENDENCIES = ['remote']
-
 CONF_REMOTE = 'remote'
 CONF_TEMP_SENSOR = 'temp_sensor'
 CONF_POWER_TEMPLATE = 'power_template'

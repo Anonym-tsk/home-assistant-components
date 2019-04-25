@@ -1,0 +1,8 @@
+{
+  "domain": "co2mon",
+  "name": "CO2Monitor",
+  "documentation": "https://github.com/Anonym-tsk/home-assistant-components/blob/master/README.md",
+  "dependencies": [],
+  "codeowners": ["@anonym-tsk"],
+  "requirements": ["CO2meter==0.2.5"]
+}
