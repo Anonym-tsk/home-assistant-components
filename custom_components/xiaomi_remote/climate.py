@@ -375,7 +375,10 @@ class RemoteClimate(ClimateDevice, RestoreEntity):
             self._last_preset_mode = state.attributes.get(ATTR_LAST_PRESET_MODE, self._default_preset_mode)
             self._current_preset_mode = state.attributes.get(ATTR_PRESET_MODE, self._last_preset_mode)
             self._target_temperature = state.attributes.get(ATTR_TEMPERATURE, self._target_temperature)
-            self._enabled_flags = state.attributes.get(ATTR_SUPPORTED_FEATURES, self._enabled_flags)
+
+            enabled_flags = state.attributes.get(ATTR_SUPPORTED_FEATURES, self._enabled_flags)
+            if enabled_flags <= SUPPORT_TARGET_TEMPERATURE | SUPPORT_FAN_MODE | SUPPORT_PRESET_MODE:
+                self._enabled_flags = enabled_flags
 
         if self._temp_entity_id:
             temp_state = self.hass.states.get(self._temp_entity_id)
