@@ -70,6 +70,7 @@ climate:
 * Use [`remote.xiaomi_miio_learn_command`](https://www.home-assistant.io/components/remote.xiaomi_miio/#remotexiaomi_miio_learn_command) to get commands from your remote.
 * Create YAML file same as `Roda-YKR-H-102E.yaml` with your commands.
   * Required command `off` (`'off': <command>`)
+  * Optional commands `presets/preset_mode` (`presets/'off': <command>`, `presets/eco: <command>`)
   * Optional commands: `operation/fan_mode/temperature` (available nesting: `operation/fan_mode/temperature`, `operation/fan_mode`, `operation`)
   * `'off'` commands must be in quotes
 
@@ -85,6 +86,10 @@ heat:
   low: <raw_command>
   high: <raw_command>
 dry: <raw_command>
+presets:
+  'off': <raw_command>
+  eco: <raw_command>
+  sleep: <raw_command>
 ```
 
 ## Xiaomi Plug Power Sensor
