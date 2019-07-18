@@ -16,9 +16,9 @@
 | `max_temp` | no | Set maximum available temperature (default: 32) |
 | `target_temp` | no | Set initial target temperature (default: 24) |
 | `target_temp_step` | no | Set target temperature step (default: 1) |
-| `operation_mode` | no | Set initial default operation mode (default: cool) |
+| `hvac_mode` | no | Set initial default operation mode (default: off) |
 | `fan_mode` | no | Set initial default fan mode (default: auto) |
-| `customize`<br/>`- operation_list`<br/>`- fan_list` | no | List of options to customize<br/>- List of operation modes (default: off, heat, cool, auto)<br/>- List of fan modes (default: low, medium, high, auto) |
+| `customize`<br/>`- hvac_modes`<br/>`- fan_modes` | no | List of options to customize<br/>- List of operation modes (default: off, heat, cool, auto)<br/>- List of fan modes (default: low, medium, high, auto) |
 
 #### Basic Example:
 ```
@@ -42,17 +42,17 @@ climate:
     max_temp: 32
     target_temp: 24
     target_temp_step: 1
-    operation_mode: cool
+    hvac_mode: 'off'
     fan_mode: auto
     customize:
-      operation_list:
+      hvac_modes:
         - 'off'
         - cool
         - heat
         - dry
         - fan_only
         - auto
-      fan_list:
+      fan_modes:
         - low
         - medium
         - high
