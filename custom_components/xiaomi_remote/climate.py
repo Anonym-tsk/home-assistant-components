@@ -8,7 +8,8 @@ from homeassistant.components.climate.const import (
     FAN_LOW, FAN_MEDIUM, FAN_HIGH, FAN_AUTO,
     ATTR_HVAC_MODE, ATTR_HVAC_MODES, ATTR_MAX_TEMP, ATTR_MIN_TEMP,
     ATTR_TARGET_TEMP_STEP, ATTR_FAN_MODE, ATTR_FAN_MODES,
-    SUPPORT_TARGET_TEMPERATURE, SUPPORT_FAN_MODE)
+    ATTR_PRESET_MODE, ATTR_PRESET_MODES,
+    SUPPORT_TARGET_TEMPERATURE, SUPPORT_FAN_MODE, SUPPORT_PRESET_MODE)
 from homeassistant.components.remote import (
     ATTR_COMMAND, DOMAIN, SERVICE_SEND_COMMAND)
 from homeassistant.const import (
@@ -34,18 +35,23 @@ DEFAULT_TARGET_TEMP = 24
 DEFAULT_TARGET_TEMP_STEP = 1
 DEFAULT_HVAC_MODES = [HVAC_MODE_OFF, HVAC_MODE_HEAT, HVAC_MODE_COOL, HVAC_MODE_AUTO]
 DEFAULT_FAN_MODES = [FAN_LOW, FAN_MEDIUM, FAN_HIGH, FAN_AUTO]
+DEFAULT_PRESET_MODES = []
 DEFAULT_HVAC_MODE = HVAC_MODE_OFF
 DEFAULT_FAN_MODE = FAN_AUTO
+DEFAULT_PRESET_MODE = None
 
 ATTR_LAST_HVAC_MODE = 'last_hvac_mode'
 ATTR_LAST_FAN_MODE = 'last_fan_mode'
+ATTR_LAST_PRESET_MODE = 'last_preset_mode'
 ATTR_SUPPORTED_FEATURES = 'supported_features'
 
 COMMAND_POWER_OFF = 'off'
+COMMAND_PRESET_MODES = 'presets'
 
 CUSTOMIZE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_HVAC_MODES): vol.All(cv.ensure_list, [cv.string]),
-    vol.Optional(ATTR_FAN_MODES): vol.All(cv.ensure_list, [cv.string])
+    vol.Optional(ATTR_FAN_MODES): vol.All(cv.ensure_list, [cv.string]),
+    vol.Optional(ATTR_PRESET_MODES): vol.All(cv.ensure_list, [cv.string])
 })
 
 COMMANDS_SCHEMA = vol.Schema({
@@ -63,6 +69,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(ATTR_TARGET_TEMP_STEP, default=DEFAULT_TARGET_TEMP_STEP): cv.positive_int,
     vol.Optional(ATTR_HVAC_MODE, default=DEFAULT_HVAC_MODE): cv.string,
     vol.Optional(ATTR_FAN_MODE, default=DEFAULT_FAN_MODE): cv.string,
+    vol.Optional(ATTR_PRESET_MODE, default=DEFAULT_PRESET_MODE): vol.Maybe(cv.string),
     vol.Optional(CONF_CUSTOMIZE, default={}): CUSTOMIZE_SCHEMA,
     vol.Required(CONF_COMMANDS): COMMANDS_SCHEMA
 })
@@ -80,21 +87,25 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     target_temp_step = config.get(ATTR_TARGET_TEMP_STEP)
     hvac_modes = config.get(CONF_CUSTOMIZE).get(ATTR_HVAC_MODES, []) or DEFAULT_HVAC_MODES
     fan_modes = config.get(CONF_CUSTOMIZE).get(ATTR_FAN_MODES, []) or DEFAULT_FAN_MODES
+    preset_modes = config.get(CONF_CUSTOMIZE).get(ATTR_PRESET_MODES, []) or DEFAULT_PRESET_MODES
     default_hvac_mode = config.get(ATTR_HVAC_MODE)
     default_fan_mode = config.get(ATTR_FAN_MODE)
+    default_preset_mode = config.get(ATTR_PRESET_MODE)
 
     temp_entity_id = config.get(CONF_TEMP_SENSOR)
     power_template = config.get(CONF_POWER_TEMPLATE)
 
     async_add_entities([
         RemoteClimate(hass, name, remote_entity_id, commands, min_temp, max_temp, target_temp, target_temp_step,
-                      hvac_modes, fan_modes, default_hvac_mode, default_fan_mode, temp_entity_id, power_template)
+                      hvac_modes, fan_modes, preset_modes, default_hvac_mode, default_fan_mode, default_preset_mode,
+                      temp_entity_id, power_template)
     ])
 
 
 class RemoteClimate(ClimateDevice, RestoreEntity):
     def __init__(self, hass, name, remote_entity_id, commands, min_temp, max_temp, target_temp, target_temp_step,
-                 hvac_modes, fan_modes, default_hvac_mode, default_fan_mode, temp_entity_id, power_template):
+                 hvac_modes, fan_modes, preset_modes, default_hvac_mode, default_fan_mode, default_preset_mode,
+                 temp_entity_id, power_template):
         """Representation of a Xiaomi Remote Climate device."""
 
         self.hass = hass
@@ -115,14 +126,20 @@ class RemoteClimate(ClimateDevice, RestoreEntity):
         self._default_fan_mode = default_fan_mode
         self._current_fan_mode = default_fan_mode
         self._last_fan_mode = default_fan_mode
+        self._default_preset_mode = default_preset_mode
+        self._current_preset_mode = default_preset_mode
+        self._last_preset_mode = default_preset_mode
 
         self._temp_entity_id = temp_entity_id
         self._power_template = power_template
 
         self._hvac_modes = hvac_modes
         self._fan_modes = fan_modes
+        self._preset_modes = preset_modes
 
         self._support_flags = SUPPORT_TARGET_TEMPERATURE | SUPPORT_FAN_MODE
+        if preset_modes:
+            self._support_flags |= SUPPORT_PRESET_MODE
         self._enabled_flags = self._support_flags
 
         if temp_entity_id:
@@ -229,11 +246,22 @@ class RemoteClimate(ClimateDevice, RestoreEntity):
         return self._fan_modes
 
     @property
+    def preset_mode(self):
+        """Return the current preset mode."""
+        return self._current_preset_mode
+
+    @property
+    def preset_modes(self):
+        """Return a list of available preset modes."""
+        return self._preset_modes
+
+    @property
     def state_attributes(self):
         """Return the optional state attributes."""
         data = super().state_attributes
         data[ATTR_LAST_HVAC_MODE] = self._last_hvac_mode
         data[ATTR_LAST_FAN_MODE] = self._last_fan_mode
+        data[ATTR_LAST_PRESET_MODE] = self._last_preset_mode
         return data
 
     @property
@@ -280,6 +308,20 @@ class RemoteClimate(ClimateDevice, RestoreEntity):
                 ATTR_ENTITY_ID: self._remote_entity_id
             })
 
+    def _send_command_preset(self):
+        """Send IR code for preset to device."""
+        preset_mode = COMMAND_POWER_OFF
+        if self._current_preset_mode is not None:
+            preset_mode = self._current_preset_mode.lower()
+        try:
+            command = self._commands[COMMAND_PRESET_MODES][preset_mode]
+            self.hass.services.call(DOMAIN, SERVICE_SEND_COMMAND, {
+                ATTR_COMMAND: 'raw:' + command,
+                ATTR_ENTITY_ID: self._remote_entity_id
+            })
+        except KeyError:
+            _LOGGER.error('Could not find command for %s/%s', COMMAND_PRESET_MODES, preset_mode)
+
     def set_temperature(self, **kwargs):
         """Set new target temperature."""
         if kwargs.get(ATTR_TEMPERATURE) is not None:
@@ -288,10 +330,10 @@ class RemoteClimate(ClimateDevice, RestoreEntity):
                 self._send_command()
             self.schedule_update_ha_state()
 
-    def set_fan_mode(self, fan):
+    def set_fan_mode(self, fan_mode):
         """Set new target fan mode."""
-        self._current_fan_mode = fan
-        self._last_fan_mode = fan
+        self._current_fan_mode = fan_mode
+        self._last_fan_mode = fan_mode
         if self.is_on:
             self._send_command()
         self.schedule_update_ha_state()
@@ -302,6 +344,14 @@ class RemoteClimate(ClimateDevice, RestoreEntity):
         if hvac_mode != HVAC_MODE_OFF:
             self._last_hvac_mode = hvac_mode
         self._send_command()
+        self.schedule_update_ha_state()
+
+    def set_preset_mode(self, preset_mode):
+        """Set new preset mode."""
+        self._current_preset_mode = preset_mode
+        self._last_preset_mode = preset_mode
+        if self.is_on:
+            self._send_command_preset()
         self.schedule_update_ha_state()
 
     def turn_on(self):
@@ -322,6 +372,8 @@ class RemoteClimate(ClimateDevice, RestoreEntity):
             self._current_hvac_mode = state.attributes.get(ATTR_HVAC_MODE, self._last_hvac_mode)
             self._last_fan_mode = state.attributes.get(ATTR_LAST_FAN_MODE, self._default_fan_mode)
             self._current_fan_mode = state.attributes.get(ATTR_FAN_MODE, self._last_fan_mode)
+            self._last_preset_mode = state.attributes.get(ATTR_LAST_PRESET_MODE, self._default_preset_mode)
+            self._current_preset_mode = state.attributes.get(ATTR_PRESET_MODE, self._last_preset_mode)
             self._target_temperature = state.attributes.get(ATTR_TEMPERATURE, self._target_temperature)
             self._enabled_flags = state.attributes.get(ATTR_SUPPORTED_FEATURES, self._enabled_flags)
 

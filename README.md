@@ -18,7 +18,7 @@
 | `target_temp_step` | no | Set target temperature step (default: 1) |
 | `hvac_mode` | no | Set initial default operation mode (default: off) |
 | `fan_mode` | no | Set initial default fan mode (default: auto) |
-| `customize`<br/>`- hvac_modes`<br/>`- fan_modes` | no | List of options to customize<br/>- List of operation modes (default: off, heat, cool, auto)<br/>- List of fan modes (default: low, medium, high, auto) |
+| `customize`<br/>`- hvac_modes`<br/>`- fan_modes`<br/>`- preset_modes` | no | List of options to customize<br/>- List of operation modes (default: off, heat, cool, auto)<br/>- List of fan modes (default: low, medium, high, auto)<br/>- List of preset modes |
 
 #### Basic Example:
 ```
@@ -57,6 +57,13 @@ climate:
         - medium
         - high
         - auto
+      preset_modes:
+        - eco
+        - away
+        - boost
+        - comfort
+        - home
+        - sleep
 ```
 
 #### How to make your configuration YAML file
